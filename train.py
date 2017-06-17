@@ -54,6 +54,8 @@ def parse_args():
         help="The directory to the text file(s) for training.")
     parser.add_argument("-checkpoint", default=None,
         help="The checkpoint file for loading the model.")
+    parser.add_argument("-gpu_id", default=2,
+        help="Enables faster computation on GPU.")
     parser.add_argument("-seq_length", type=int, default=25,
         help="The length of sequences to be used for training.")
     parser.add_argument("-validation_split", type=float, default=0.1,
@@ -75,9 +77,9 @@ def parse_args():
     
     # parse arguments and return their values
     args = parser.parse_args()
-    return args.data_dir, args.checkpoint, args.seq_length, args.validation_split, \
-           args.batch_size, args.rnn_size, args.num_layers, args.dropout, \
-           args.epochs, args.verbose, args.tensorboard
+    return args.data_dir, args.checkpoint, args.gpu_id, args.seq_length, 
+           args.validation_split, args.batch_size, args.rnn_size, args.num_layers,
+           args.dropout, args.epochs, args.verbose, args.tensorboard
 
 
 def print_data(text):
@@ -214,7 +216,8 @@ def generate_batches(mode, text_data, seq_length, validation_split,
             raise ValueError("only 'validation' and 'train' modes accepted")
 
 
-def build_model(batch_size, seq_length, n_vocab, rnn_size, num_layers, drop_prob):
+def build_model(batch_size, seq_length, n_vocab, rnn_size, num_layers, 
+                drop_prob, gpu_id):
     '''Defines the RNN LSTM model.
 
        Args:
@@ -231,15 +234,20 @@ def build_model(batch_size, seq_length, n_vocab, rnn_size, num_layers, drop_prob
     for i in range(num_layers):
         if i == num_layers - 1:
             # add last hidden layer
-            model.add(LSTM(rnn_size, return_sequences=False))
+            model.add(LSTM(rnn_size, 
+                           return_sequences=False,
+                           implementation=gpu_id))
         elif i == 0:
             # add first hidden layer - This crashes if num_layers == 1
             model.add(LSTM(rnn_size, 
                            batch_input_shape=(None, seq_length, n_vocab),
-                           return_sequences=True))
+                           return_sequences=True,
+                           implementation=gpu_id))
         else:
             # add middle hidden layer
-            model.add(LSTM(rnn_size, return_sequences=True))
+            model.add(LSTM(rnn_size, 
+                           return_sequences=True,
+                           implementation=gpu_id))
         model.add(Dropout(drop_prob))
     # add output layer
     model.add(Dense(n_vocab, activation='softmax'))
@@ -314,7 +322,7 @@ def Main():
     else:
         # build and compile Keras model
         model = build_model(batch_size, seq_length, n_vocab,
-                            rnn_size, num_layers, drop_prob)
+                            rnn_size, num_layers, drop_prob, gpu_id)
     if verbose:
         print(model.summary())
 
@@ -327,7 +335,7 @@ def Main():
 if __name__ == "__main__":
 
     # parse keyword arguments
-    data_dir, checkpoint, seq_length, validation_split, batch_size, rnn_size, \
+    data_dir, checkpoint, gpu_id, seq_length, validation_split, batch_size, rnn_size, \
     num_layers, drop_prob, epochs, verbose, use_tensorboard = parse_args()
 
     Main()
