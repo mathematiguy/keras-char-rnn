@@ -52,28 +52,30 @@ def parse_args():
     # add arguments, set default values and expected types
     parser.add_argument("-data_dir",
         help="The directory to the text file(s) for training.")
+    parser.add_argument("-checkpoint", default=None,
+        help="The checkpoint file for loading the model.")
     parser.add_argument("-seq_length", type=int, default=25,
-        help="The length of sequences to be used for training")
+        help="The length of sequences to be used for training.")
     parser.add_argument("-validation_split", type=float, default=0.1,
-        help="The proportion of the training data to use for validation")
+        help="The proportion of the training data to use for validation.")
     parser.add_argument("-batch_size", type=int, default=100,
-        help="The number of minibatches to be used for training")
+        help="The number of minibatches to be used for training.")
     parser.add_argument("-rnn_size", type=int, default=128,
-        help="The number of cells in each hidden layer in the network")
+        help="The number of cells in each hidden layer in the network.")
     parser.add_argument("-num_layers", type=int, default=3,
-        help="The number of hidden layers in the network")
+        help="The number of hidden layers in the network.")
     parser.add_argument("-dropout", type=float, default=0.1,
-        help="Dropout value (between 0, 1 exclusive)")
+        help="Dropout value (between 0, 1 exclusive).")
     parser.add_argument("-epochs", type=int, default=20,
-        help="Number of epochs for training")
+        help="Number of epochs for training.")
     parser.add_argument("-verbose", type=int, default=1,
-        help="Number of epochs for training")
+        help="Set to 1 for verbose output, 0 to turn off.")
     parser.add_argument("-tensorboard", type=int, default=1,
-        help="Save model statistics to tensorboard")
+        help="Save model statistics to tensorboard.")
     
     # parse arguments and return their values
     args = parser.parse_args()
-    return args.data_dir, args.seq_length, args.validation_split, \
+    return args.data_dir, args.checkpoint, args.seq_length, args.validation_split, \
            args.batch_size, args.rnn_size, args.num_layers, args.dropout, \
            args.epochs, args.verbose, args.tensorboard
 
@@ -212,8 +214,7 @@ def generate_batches(mode, text_data, seq_length, validation_split,
             raise ValueError("only 'validation' and 'train' modes accepted")
 
 
-def build_model(batch_size, seq_length, n_vocab, 
-                rnn_size, num_layers, drop_prob):
+def build_model(batch_size, seq_length, n_vocab, rnn_size, num_layers, drop_prob):
     '''Defines the RNN LSTM model.
 
        Args:
@@ -307,9 +308,15 @@ def Main():
     char_to_int, int_to_char, n_chars, n_vocab = \
                                 process_text(text_data, seq_length)
 
-    # build and compile Keras model
-    model = build_model(batch_size, seq_length, n_vocab,
-                        rnn_size, num_layers, drop_prob)
+    if checkpoint is not None:
+        # load model from checkpoint file
+        model = load_model(checkpoint)
+    else:
+        # build and compile Keras model
+        model = build_model(batch_size, seq_length, n_vocab,
+                            rnn_size, num_layers, drop_prob)
+    if verbose:
+        print(model.summary())
 
     # fit model using generator
     hist = fit_model(model, text_data, seq_length, validation_split, epochs,
@@ -320,7 +327,7 @@ def Main():
 if __name__ == "__main__":
 
     # parse keyword arguments
-    data_dir, seq_length, validation_split, batch_size, rnn_size, \
+    data_dir, checkpoint, seq_length, validation_split, batch_size, rnn_size, \
     num_layers, drop_prob, epochs, verbose, use_tensorboard = parse_args()
 
     Main()

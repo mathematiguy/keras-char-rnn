@@ -2,9 +2,9 @@
 import os, re
 from io import open
 import scrapy
-from scrapy import Request
+from scrapy import Request, Spider
 
-class TranscriptsSpider(scrapy.Spider):
+class TranscriptsSpider(Spider):
     name = 'transcripts'
     allowed_domains = ['cecilspeaks.tumblr.com']
     start_urls = ['http://cecilspeaks.tumblr.com/']
