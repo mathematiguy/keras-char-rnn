@@ -15,7 +15,6 @@ TO DO:
 - Improve tensorboard logs
 - Implement optional text sample log callback
 - Add other optimizers?
-- Fix not-displaying validation loss
 - Optionally suppress warnings?
 - Tidy up print statements
 - Implement recursive file search
@@ -24,6 +23,7 @@ DONE:
 - Double check generators are correct (i.e. correctly assign training/
   validation data in the correct proportions)
 - Implement shuffling of data for training/validation set
+- Fix not-displaying validation loss
 '''
 
 import os, re, random
@@ -50,11 +50,14 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     # add arguments, set default values and expected types
-    parser.add_argument("-data_dir",
+    parser.add_argument("-data_dir", type=str,
         help="The directory to the text file(s) for training.")
-    parser.add_argument("-checkpoint", default=None,
+    parser.add_argument("-checkpoint", type=str, default=None,
         help="The checkpoint file for loading the model.")
-    parser.add_argument("-gpu_id", default=2,
+    parser.add_argument("-low_memory", type=int, default=0,
+        help="If 1: use generator for batching, " + 
+             "if 0: load all batches to memory.")
+    parser.add_argument("-gpu_id", type=int, default=2,
         help="Enables faster computation on GPU.")
     parser.add_argument("-seq_length", type=int, default=25,
         help="The length of sequences to be used for training.")
@@ -77,9 +80,10 @@ def parse_args():
     
     # parse arguments and return their values
     args = parser.parse_args()
-    return args.data_dir, args.checkpoint, args.gpu_id, args.seq_length, 
-           args.validation_split, args.batch_size, args.rnn_size, args.num_layers,
-           args.dropout, args.epochs, args.verbose, args.tensorboard
+    return args.data_dir, args.checkpoint, args.low_memory, args.gpu_id, \
+           args.seq_length, args.validation_split, args.batch_size, \
+           args.rnn_size, args.num_layers, args.dropout, args.epochs, \
+           args.verbose, args.tensorboard
 
 
 def print_data(text):
@@ -217,7 +221,7 @@ def generate_batches(mode, text_data, seq_length, validation_split,
 
 
 def build_model(batch_size, seq_length, n_vocab, rnn_size, num_layers, 
-                drop_prob, gpu_id):
+                drop_prob, gpu_id, checkpoint):
     '''Defines the RNN LSTM model.
 
        Args:
@@ -230,31 +234,38 @@ def build_model(batch_size, seq_length, n_vocab, rnn_size, num_layers,
        Returns:
         - model: (keras.models.Sequential) The constructed Keras model.'''
 
-    model = Sequential()
-    for i in range(num_layers):
-        if i == num_layers - 1:
-            # add last hidden layer
-            model.add(LSTM(rnn_size, 
-                           return_sequences=False,
-                           implementation=gpu_id))
-        elif i == 0:
-            # add first hidden layer - This crashes if num_layers == 1
-            model.add(LSTM(rnn_size, 
-                           batch_input_shape=(None, seq_length, n_vocab),
-                           return_sequences=True,
-                           implementation=gpu_id))
-        else:
-            # add middle hidden layer
-            model.add(LSTM(rnn_size, 
-                           return_sequences=True,
-                           implementation=gpu_id))
-        model.add(Dropout(drop_prob))
-    # add output layer
-    model.add(Dense(n_vocab, activation='softmax'))
+    if checkpoint is not None:
+        # load model from checkpoint file
+        model = load_model(checkpoint)
+    else:
+        model = Sequential()
+        
+        for i in range(num_layers):
+            if i == num_layers - 1:
+                # add last hidden layer
+                model.add(LSTM(rnn_size, 
+                               return_sequences=False,
+                               implementation=gpu_id))
+            elif i == 0:
+                # add first hidden layer - This crashes if num_layers == 1
+                model.add(LSTM(rnn_size, 
+                               batch_input_shape=(None, seq_length, n_vocab),
+                               return_sequences=True,
+                               implementation=gpu_id))
+            else:
+                # add middle hidden layer
+                model.add(LSTM(rnn_size, 
+                               return_sequences=True,
+                               implementation=gpu_id))
+            model.add(Dropout(drop_prob))
+        # add output layer
+        model.add(Dense(n_vocab, activation='softmax'))
 
-    # compile model
-    model.compile(loss='categorical_crossentropy', optimizer='adam',
-                  metrics=['accuracy'])  
+        # compile model
+        model.compile(loss='categorical_crossentropy', optimizer='adam',
+                      metrics=['accuracy'])  
+
+    print(model.summary())
 
     return model
 
@@ -281,8 +292,9 @@ def set_callbacks(verbose, use_tensorboard, checkpoint_dir = "checkpoints"):
     return callbacks
 
 
-def fit_model(model, text_data, seq_length, validation_split, epochs, 
-              batch_size, char_to_int, n_chars, n_vocab, verbose, use_tensorboard):
+def fit_model(model, text_data, low_memory, seq_length, validation_split, 
+              epochs, batch_size, char_to_int, n_chars, n_vocab, verbose, 
+              use_tensorboard):
     '''Trains the model on the training data.
 
        Args:
@@ -291,18 +303,28 @@ def fit_model(model, text_data, seq_length, validation_split, epochs,
        - seq_length:
        - batch_size:
        - char_to_int:'''
-    n_batches = len(text_data) // batch_size
-    batch_params = (text_data, seq_length, validation_split,
-                     batch_size, char_to_int, n_chars, n_vocab)
-    hist = model.fit_generator(
-               generator = generate_batches('train', *batch_params),
-               validation_data = generate_batches('validation', *batch_params),
-               validation_steps = int(n_batches * validation_split),
-               workers = 1,
-               epochs = epochs,
-               steps_per_epoch = n_batches,
-               verbose = verbose,
-               callbacks = set_callbacks(verbose, use_tensorboard))
+
+    if low_memory:
+        n_batches = len(text_data) // batch_size
+        batch_params = (text_data, seq_length, validation_split,
+                         batch_size, char_to_int, n_chars, n_vocab)
+        hist = model.fit_generator(
+                   generator = generate_batches('train', *batch_params),
+                   validation_data = generate_batches('validation', *batch_params),
+                   validation_steps = int(n_batches * validation_split),
+                   workers = 1,
+                   epochs = epochs,
+                   steps_per_epoch = n_batches,
+                   verbose = verbose,
+                   callbacks = set_callbacks(verbose, use_tensorboard))
+    else:
+        train_size = n_chars - n_chars % seq_length - seq_length
+        starts = range(train_size)
+        X, y = get_batch(0, starts, text_data, seq_length, train_size, 
+                         char_to_int, n_vocab)
+        hist = model.fit(X, y, batch_size=batch_size, epochs=epochs, 
+                         verbose=verbose, validation_split=validation_split)
+    
     return hist
 
 
@@ -316,26 +338,21 @@ def Main():
     char_to_int, int_to_char, n_chars, n_vocab = \
                                 process_text(text_data, seq_length)
 
-    if checkpoint is not None:
-        # load model from checkpoint file
-        model = load_model(checkpoint)
-    else:
-        # build and compile Keras model
-        model = build_model(batch_size, seq_length, n_vocab,
-                            rnn_size, num_layers, drop_prob, gpu_id)
-    if verbose:
-        print(model.summary())
+    # build and compile Keras model
+    model = build_model(batch_size, seq_length, n_vocab,
+                        rnn_size, num_layers, drop_prob, gpu_id, checkpoint)
 
     # fit model using generator
-    hist = fit_model(model, text_data, seq_length, validation_split, epochs,
-                     batch_size, char_to_int, n_chars, n_vocab,  
+    hist = fit_model(model, text_data, low_memory, seq_length, validation_split,
+                     epochs, batch_size, char_to_int, n_chars, n_vocab,  
                      verbose, use_tensorboard)
 
 
 if __name__ == "__main__":
 
     # parse keyword arguments
-    data_dir, checkpoint, gpu_id, seq_length, validation_split, batch_size, rnn_size, \
-    num_layers, drop_prob, epochs, verbose, use_tensorboard = parse_args()
+    data_dir, checkpoint, low_memory, gpu_id, seq_length, validation_split, \
+    batch_size, rnn_size, num_layers, drop_prob, epochs, verbose, \
+    use_tensorboard = parse_args()
 
     Main()
