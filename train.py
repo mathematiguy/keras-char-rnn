@@ -28,7 +28,6 @@ DONE:
 
 import os, re, random
 import sys, argparse, codecs
-import itertools as it
 import numpy as np
 from keras.models import Sequential, load_model
 from keras.layers import Dense, Dropout, LSTM
@@ -58,7 +57,8 @@ def parse_args():
         help="If 1: use generator for batching, " + 
              "if 0: load all batches to memory.")
     parser.add_argument("-gpu_id", type=int, default=2,
-        help="Enables faster computation on GPU.")
+        help="Enables faster computation on GPU. If 0, fast on cpu, if 1 low" +
+             " memory use (may be faster on GPU), if 2 fast on GPU")
     parser.add_argument("-seq_length", type=int, default=25,
         help="The length of sequences to be used for training.")
     parser.add_argument("-validation_split", type=float, default=0.1,
@@ -324,7 +324,7 @@ def fit_model(model, text_data, low_memory, seq_length, validation_split,
                          char_to_int, n_vocab)
         hist = model.fit(X, y, batch_size=batch_size, epochs=epochs, 
                          verbose=verbose, validation_split=validation_split)
-    
+
     return hist
 
 
