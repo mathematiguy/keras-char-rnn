@@ -20,7 +20,8 @@ class TranscriptsSpider(Spider):
 
         for link in links:
         	# request transcript from link
-        	yield Request(link, callback=self.parse_transcript, 
+        	yield Request(link, 
+        				  callback=self.parse_transcript, 
         				  dont_filter=True)
     
     def parse_transcript(self, response):
@@ -51,7 +52,7 @@ class TranscriptsSpider(Spider):
 	    
 	    # set path to output files
 	    OUTPUT_PATH = "C:\\Users\\caleb\\Documents\\Data Science\\" + \
-	    					"welcome-to-night-vale\\data\\transcripts"
+	    			  "welcome-to-night-vale\\data\\transcripts"
 	    
 		# ensure file name is not rejected by os (windows)
 	    title = re.sub(r'/|:|\*|\?|"|<|>|\|', '', title)

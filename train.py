@@ -322,8 +322,9 @@ def fit_model(model, text_data, low_memory, seq_length, validation_split,
         starts = range(train_size)
         X, y = get_batch(0, starts, text_data, seq_length, train_size, 
                          char_to_int, n_vocab)
-        hist = model.fit(X, y, batch_size=batch_size, epochs=epochs, 
-                         verbose=verbose, validation_split=validation_split)
+        hist = model.fit(X, y, 
+                         batch_size=batch_size, epochs=epochs, verbose=verbose,
+                         validation_split=validation_split)
 
     return hist
 
