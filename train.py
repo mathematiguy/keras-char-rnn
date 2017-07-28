@@ -77,8 +77,8 @@ def parse_args():
     
     # parse arguments and return their values
     args = parser.parse_args()
-    return args.data_dir, args.checkpoint, args.gpu_id, args.seq_length, 
-           args.validation_split, args.batch_size, args.rnn_size, args.num_layers,
+    return args.data_dir, args.checkpoint, args.gpu_id, args.seq_length, \
+           args.validation_split, args.batch_size, args.rnn_size, args.num_layers, \
            args.dropout, args.epochs, args.verbose, args.tensorboard
 
 
