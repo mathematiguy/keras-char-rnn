@@ -54,7 +54,7 @@ def parse_args():
         help="The directory to the text file(s) for training.")
     parser.add_argument("-checkpoint", default=None,
         help="The checkpoint file for loading the model.")
-    parser.add_argument("-gpu_id", default=2,
+    parser.add_argument("-gpu_id", type=int, default=2,
         help="Enables faster computation on GPU.")
     parser.add_argument("-seq_length", type=int, default=25,
         help="The length of sequences to be used for training.")
